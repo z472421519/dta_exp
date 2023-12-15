@@ -1765,7 +1765,7 @@ fun:fputwc_unlocked=uninstrumented
 fun:fputws=uninstrumented
 fun:fputws_unlocked=uninstrumented
 # TODO: modify the fread instrument option
-fun:fread=uninstrumented
+# fun:fread=uninstrumented
 #fun:fread_unlocked=uninstrumented
 fun:free=uninstrumented
 fun:freeaddrinfo=uninstrumented

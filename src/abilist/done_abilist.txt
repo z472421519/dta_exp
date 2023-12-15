@@ -323,6 +323,8 @@ fun:__dfsan_test=discard
 # I/O hook extension
 ###############################################################################
 # TODO: Add source hook here!
+fun:fread=uninstrumented
+fun:fread=custom
 fun:fgets=uninstrumented
 fun:fgets=custom
 fun:pread=uninstrumented

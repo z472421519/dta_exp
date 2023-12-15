@@ -1724,8 +1724,23 @@ void DFSanVisitor::visitStoreInst(StoreInst &SI) {
   if (!ClHookInst) return;
 
   //TODO: add out of bound access check here!
-  // IRBuilder<> IRB(&BI);
-  // CallInst *Call = IRB.CreateCall(DFSF.DFS.DFSanTestFn);
+  if(auto GEPInst = dyn_cast<GetElementPtrInst>(SI.getPointerOperand())){
+    Type* type = GEPInst->getPointerOperand()->getType()->getPointerElementType();
+
+    if(type->isArrayTy()){
+
+      IRBuilder<> IRB(&SI);
+      Value* index = GEPInst->getOperand(2);
+      ArrayType* ArrayTy= dyn_cast<ArrayType>(type);
+      unsigned size = ArrayTy->getNumElements();
+
+      Value* cond = IRB.CreateICmpSGE(index, ConstantInt::get(DFSF.DFS.SizeTy, size));
+
+      Instruction *then_br = SplitBlockAndInsertIfThen(cond, &SI, false, DFSF.DFS.ColdCallWeights,&DFSF.DT);
+      IRBuilder<> TB(then_br);
+      CallInst *Call = TB.CreateCall(DFSF.DFS.DFSanTestFn);
+    }
+  }
 }
 
 void DFSanVisitor::visitUnaryOperator(UnaryOperator &UO) {
@@ -1738,10 +1753,30 @@ void DFSanVisitor::visitBinaryOperator(BinaryOperator &BO) {
   // Op1 is the first operand of the IR
   // Op2 is the second operand of the IR
 
-  // IRBuilder<> IRB1(BI);
-  // Value *CombinedShadow = DFSF.combineShadows(DFSF.getShadow(Ope1), DFSF.getShadow(Ope2), BI);
-  // DFSF.setShadow(&BO, CombinedShadow);
-  visitOperandShadowInst(BO);
+  if(BO.getOpcode() == Instruction::Add){
+    //only for positive overflow,
+    //negative overflow is impossbible for this program
+    Instruction *nextInst = BO.getNextNode();
+    Value *Op1 = BO.getOperand(0);
+    Value *Op2 = BO.getOperand(1);
+
+    IRBuilder<> IRB1(nextInst);
+
+    Value* zero = ConstantInt::get(DFSF.DFS.Int32Ty, 0);
+
+    Value *cond1 = IRB1.CreateICmpSGT(Op1,zero);
+    Value *cond2 = IRB1.CreateICmpSGT(Op2,zero);
+    Value *cond3 = IRB1.CreateICmpSLT(&BO,zero);
+
+    Value *cond_12 = IRB1.CreateAnd(cond1,cond2);
+    Value *cond = IRB1.CreateAnd(cond_12,cond3);
+
+    Instruction *then_br = SplitBlockAndInsertIfThen(cond, nextInst,false, DFSF.DFS.ColdCallWeights,&DFSF.DT);
+    Value *CombinedShadow = DFSF.combineShadows(DFSF.getShadow(Op1), DFSF.getShadow(Op2), then_br);
+    DFSF.setShadow(&BO, CombinedShadow);
+  }
+  else
+    visitOperandShadowInst(BO);
 
 }
 
